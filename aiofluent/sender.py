@@ -1,4 +1,7 @@
 # -*- coding: utf-8 -*-
+from asyncio import tasks
+from asyncio.base_events import _ensure_resolved
+
 import asyncio
 import msgpack
 import socket
@@ -29,17 +32,95 @@ def close():
     get_global_sender().close()
 
 
+async def create_socket(loop, host, port):
+    f1 = _ensure_resolved((host, port), family=0,
+                          type=socket.SOCK_STREAM, proto=0,
+                          flags=0, loop=loop)
+    fs = [f1]
+    f2 = None
+
+    await tasks.wait(fs, loop=loop)
+
+    infos = f1.result()
+    if not infos:
+        raise OSError('getaddrinfo() returned empty list')
+    if f2 is not None:
+        laddr_infos = f2.result()
+        if not laddr_infos:
+            raise OSError('getaddrinfo() returned empty list')
+
+    exceptions = []
+    for family, type, proto, cname, address in infos:
+        try:
+            sock = socket.socket(family=family, type=type, proto=proto)
+            sock.setblocking(False)
+            if f2 is not None:
+                for _, _, _, _, laddr in laddr_infos:
+                    try:
+                        sock.bind(laddr)
+                        break
+                    except OSError as exc:
+                        exc = OSError(
+                            exc.errno, 'error while '
+                            'attempting to bind on address '
+                            '{!r}: {}'.format(
+                                laddr, exc.strerror.lower()))
+                        exceptions.append(exc)
+                else:
+                    sock.close()
+                    sock = None
+                    continue
+            await loop.sock_connect(sock, address)
+        except OSError as exc:
+            if sock is not None:
+                sock.close()
+            exceptions.append(exc)
+        except:
+            if sock is not None:
+                sock.close()
+            raise
+        else:
+            break
+    else:
+        if len(exceptions) == 1:
+            raise exceptions[0]
+        else:
+            # If they all have the same str(), raise one.
+            model = str(exceptions[0])
+            if all(str(exc) == model for exc in exceptions):
+                raise exceptions[0]
+            # Raise a combined exception so the user can see all
+            # the various error messages.
+            raise OSError('Multiple exceptions: {}'.format(
+                ', '.join(str(exc) for exc in exceptions)))
+    return sock
+
+
 async def connection_factory(sender):
+    sock = None
+    error = False
+    loop = asyncio.get_event_loop()
     try:
+        sock = await asyncio.wait_for(
+            create_socket(loop, sender._host, sender._port),
+            timeout=sender._timeout)
         return await asyncio.wait_for(
-            asyncio.open_connection(sender._host, sender._port),
+            asyncio.open_connection(sock=sock),
             sender._timeout)
     except (asyncio.TimeoutError, asyncio.CancelledError) as ex:
+        error = True
         sys.stderr.write(f'Timeout connecting to fluentd')
         sender.last_error = ex
     except Exception as ex:
+        error = True
         sys.stderr.write(f'Unknown error connecting to fluentd')
         sender.last_error = ex
+    if error:
+        try:
+            loop.remove_writer(sock.fileno())
+            sock.close()
+        except:
+            pass
 
 
 class FluentSender(object):
@@ -48,7 +129,7 @@ class FluentSender(object):
                  host='localhost',
                  port=24224,
                  bufmax=1 * 1024 * 1024,
-                 timeout=0.3,
+                 timeout=0.5,
                  verbose=False,
                  buffer_overflow_handler=None,
                  retry_timeout=30,
@@ -149,7 +230,8 @@ class FluentSender(object):
 
             # Connection error, retry connecting
             self.clean(bytes_)
-            self.close()
+            async with self.lock:
+                self.close()
             self._writer = self._reader = None
             return False
         except Exception as ex:

@@ -1,7 +1,9 @@
 1.1.3 (unreleased)
 ------------------
 
-- Nothing changed yet.
+- Manually create socket so we can make sure to close it if there is ever
+  an error connecting
+  [vangheem]
 
 
 1.1.2 (2018-02-07)
