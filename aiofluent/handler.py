@@ -81,7 +81,7 @@ class FluentRecordFormatter(logging.Formatter, object):
                 data[str(key)] = value
 
 
-MAX_QUEUE_SIZE = 100
+MAX_QUEUE_SIZE = 1000
 
 
 class LogQueue:
@@ -89,9 +89,8 @@ class LogQueue:
     def __init__(self):
         self._queue = None
 
-    async def consume_queue(self, initial_record, handler):
+    async def consume_queue(self):
         self._queue = asyncio.Queue(maxsize=MAX_QUEUE_SIZE)
-        self._queue.put_nowait((initial_record, handler, time.time()))
         while True:
             record, handler, timestamp = await self._queue.get()
             try:
@@ -138,27 +137,30 @@ class FluentHandler(logging.Handler):
                                           nanosecond_precision=self.nanosecond_precision,
                                           **kwargs)
         logging.Handler.__init__(self)
+        self.setup_queue()
 
-    def emit(self, record):
+    def setup_queue(self):
         if FluentHandler._queue_task is None or FluentHandler._queue_task.done():
             # the queue should be a singleton, we don't need a task
             # for every log handler
             try:
                 FluentHandler._queue = LogQueue()
                 FluentHandler._queue_task = asyncio.ensure_future(
-                    FluentHandler._queue.consume_queue(record, self), loop=self.loop)
+                    FluentHandler._queue.consume_queue(), loop=self.loop)
             except RuntimeError:
                 sys.stderr.write(
                     'No event loop running to send log to fluentd')
-        else:
-            try:
-                FluentHandler._queue.put_nowait((record, self, time.time()))
-            except asyncio.QueueFull:
-                sys.stderr.write(
-                    f'Hit max log queue size({MAX_QUEUE_SIZE}), '
-                    'discarding message')
-            except AttributeError:
-                sys.stderr.write('Error sending async fluentd message')
+
+    def emit(self, record):
+        self.setup_queue()
+        try:
+            FluentHandler._queue.put_nowait((record, self, time.time()))
+        except asyncio.QueueFull:
+            sys.stderr.write(
+                f'Hit max log queue size({MAX_QUEUE_SIZE}), '
+                'discarding message')
+        except AttributeError:
+            sys.stderr.write('Error sending async fluentd message')
 
     async def async_emit(self, record, timestamp=None):
         data = self.format(record)
