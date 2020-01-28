@@ -86,11 +86,12 @@ MAX_QUEUE_SIZE = 1000
 
 class LogQueue:
 
-    def __init__(self):
+    def __init__(self, max_queue_size=MAX_QUEUE_SIZE):
         self._queue = None
+        self._queue_size = max_queue_size
 
     async def consume_queue(self):
-        self._queue = asyncio.Queue(maxsize=MAX_QUEUE_SIZE)
+        self._queue = asyncio.Queue(maxsize=self._queue_size)
         while True:
             record, handler, timestamp = await self._queue.get()
             try:
@@ -127,10 +128,12 @@ class FluentHandler(logging.Handler):
                  verbose=False,
                  loop=None,
                  nanosecond_precision=False,
+                 max_queue_size=MAX_QUEUE_SIZE,
                  **kwargs):
         self.loop = loop
         self.tag = tag
         self.nanosecond_precision = nanosecond_precision
+        self.queue_size = max_queue_size
         self.sender = sender.FluentSender(tag,
                                           host=host, port=port,
                                           timeout=timeout, verbose=verbose,
@@ -144,7 +147,7 @@ class FluentHandler(logging.Handler):
             # the queue should be a singleton, we don't need a task
             # for every log handler
             try:
-                FluentHandler._queue = LogQueue()
+                FluentHandler._queue = LogQueue(self.queue_size)
                 FluentHandler._queue_task = asyncio.ensure_future(
                     FluentHandler._queue.consume_queue(), loop=self.loop)
             except RuntimeError:
@@ -157,7 +160,7 @@ class FluentHandler(logging.Handler):
             FluentHandler._queue.put_nowait((record, self, time.time()))
         except asyncio.QueueFull:
             sys.stderr.write(
-                f'Hit max log queue size({MAX_QUEUE_SIZE}), '
+                f'Hit max log queue size({self.queue_size}), '
                 'discarding message')
         except AttributeError:
             sys.stderr.write('Error sending async fluentd message')
