@@ -66,6 +66,7 @@ class FluentSender(object):
                  retry_timeout=30,
                  connection_factory=connection_factory,
                  nanosecond_precision=True,
+                 log_unhandled_exceptions=False,
                  **kwargs):
 
         self._tag = tag
@@ -76,6 +77,7 @@ class FluentSender(object):
         self._verbose = verbose
         self._buffer_overflow_handler = buffer_overflow_handler
         self._nanosecond_precision = nanosecond_precision
+        self._log_unhandled_exceptions = log_unhandled_exceptions
 
         self._pendings = None
         self._reader = None
@@ -175,7 +177,9 @@ class FluentSender(object):
             return False
         except Exception as ex:
             self.last_error = ex
-            sys.stderr.write('Unhandled exception sending data')
+            sys.stderr.write(f'Unhandled exception sending data')
+            if self._log_unhandled_exceptions:
+                sys.stderr.write(f'{ex}: {traceback.format_exc()}')
             self.clean(bytes_)
             return False
 
