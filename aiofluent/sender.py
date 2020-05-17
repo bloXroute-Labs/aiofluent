@@ -67,6 +67,7 @@ class FluentSender(object):
                  connection_factory=connection_factory,
                  nanosecond_precision=True,
                  log_unhandled_exceptions=False,
+                 error_count_limit=10,
                  **kwargs):
 
         self._tag = tag
@@ -86,6 +87,8 @@ class FluentSender(object):
 
         self._last_error = None
         self._last_error_time = 0
+        self._error_count = 0
+        self._error_count_limit = error_count_limit
         self._lock = None
 
         self._connection_factory = connection_factory
@@ -107,6 +110,7 @@ class FluentSender(object):
             result = await self._connection_factory(self)
             if result:
                 self._reader, self._writer = result
+                self._error_count = 0
             return self._writer
 
     async def async_emit(self, label, data, timestamp=None):
@@ -173,14 +177,18 @@ class FluentSender(object):
             self.clean(bytes_)
             async with self.lock:
                 self.close()
-            self._writer = self._reader = None
             return False
         except Exception as ex:
+            self._error_count += 1
             self.last_error = ex
             sys.stderr.write(f'Unhandled exception sending data')
             if self._log_unhandled_exceptions:
                 sys.stderr.write(f'{ex}: {traceback.format_exc()}')
             self.clean(bytes_)
+            if self._error_count > self._error_count_limit:
+                async with self.lock:
+                    self.close()
+
             return False
 
     def clean(self, bytes_=b''):
