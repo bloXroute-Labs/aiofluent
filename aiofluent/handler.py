@@ -87,18 +87,16 @@ MAX_QUEUE_SIZE = 1000
 class LogQueue:
 
     def __init__(self, max_queue_size=MAX_QUEUE_SIZE):
-        self._queue = None
         self._queue_size = max_queue_size
+        self._queue = asyncio.Queue(maxsize=self._queue_size)
 
     async def consume_queue(self):
-        self._queue = asyncio.Queue(maxsize=self._queue_size)
         while True:
             record, handler, timestamp = await self._queue.get()
             try:
                 await handler.async_emit(record, timestamp)
             except:  # noqa
-                sys.stderr.write(
-                    f'Error processing log')
+                sys.stderr.write(f'Error processing log')
             finally:
                 self._queue.task_done()
 
@@ -108,6 +106,7 @@ class LogQueue:
         return self._queue.qsize()
 
     def put_nowait(self, *args):
+        assert self._queue is not None
         self._queue.put_nowait(*args)
 
 
@@ -162,8 +161,6 @@ class FluentHandler(logging.Handler):
             sys.stderr.write(
                 f'Hit max log queue size({self.queue_size}), '
                 'discarding message')
-        except AttributeError:
-            sys.stderr.write('Error sending async fluentd message')
 
     async def async_emit(self, record, timestamp=None):
         data = self.format(record)
