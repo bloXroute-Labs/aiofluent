@@ -1,4 +1,5 @@
 import aiofluent.handler
+from aiofluent.sender import EventTime
 import asyncio
 import logging
 import pytest
@@ -38,9 +39,9 @@ async def test_simple(mock_server, event_loop):
     assert 'userA' == data[0][2]['from']
     assert 'userB' == data[0][2]['to']
 
-    assert isinstance(data[0][1].seconds, int)
-    assert isinstance(data[0][1].nanoseconds, int)
-    assert data[0][1].seconds == int(test_start_time)
+    et = EventTime.from_bytes(data[0][1].data)
+    assert isinstance(et, float)
+    assert et == test_start_time
 
 
 @pytest.mark.asyncio

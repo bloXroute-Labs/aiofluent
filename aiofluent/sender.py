@@ -43,6 +43,23 @@ async def connection_factory(sender):
         sender.last_error = ex
 
 
+class EventTime(msgpack.ExtType):
+
+    def __new__(cls, timestamp):
+        seconds = int(timestamp)
+        nanoseconds = int(timestamp % 1 * 10 ** 9)
+        return super(EventTime, cls).__new__(
+            cls,
+            code=0,
+            data=struct.pack(">II", seconds, nanoseconds),
+        )
+
+    @staticmethod
+    def from_bytes(b: bytes) -> float:
+        seconds, nanoseconds = struct.unpack(">II", b)
+        return seconds + nanoseconds / 10 ** 9
+
+
 class FluentSender(object):
     def __init__(self,
                  tag,
@@ -106,7 +123,7 @@ class FluentSender(object):
         return await self.async_emit_with_time(label, timestamp, data)
 
     async def async_emit_with_time(self, label, timestamp: float, data):
-        et = msgpack.Timestamp(int(timestamp), int(timestamp % 1 * 10 ** 9))
+        et = EventTime(timestamp)
         try:
             bytes_ = self._make_packet(label, et, data)
         except Exception as e:

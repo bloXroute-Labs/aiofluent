@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 import aiofluent.sender
+from aiofluent.sender import EventTime
 import pytest
 import socket
 import time
@@ -52,10 +53,10 @@ async def test_simple(mock_sender, mock_server):
     assert 3 == len(data[0])
     assert 'test.foo' == data[0][0]
     assert {'bar': 'baz'} == data[0][2]
-    assert data[0][1]
-    assert isinstance(data[0][1].seconds, int)
-    assert isinstance(data[0][1].nanoseconds, int)
-    assert data[0][1].seconds == int(test_start_time)
+
+    et = EventTime.from_bytes(data[0][1].data)
+    assert isinstance(et, float)
+    assert et == test_start_time
 
 
 @pytest.mark.asyncio
