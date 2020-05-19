@@ -2,6 +2,8 @@
 import aiofluent.sender
 import pytest
 import socket
+import time
+from mock import MagicMock
 
 
 def test_no_kwargs():
@@ -42,6 +44,8 @@ def test_tolerant():
 
 @pytest.mark.asyncio
 async def test_simple(mock_sender, mock_server):
+    test_start_time = time.time()
+    time.time = MagicMock(return_value=test_start_time)
     await mock_sender.async_emit('foo', {'bar': 'baz'})
     data = mock_server.get_recieved()
     assert 1 == len(data)
@@ -49,7 +53,9 @@ async def test_simple(mock_sender, mock_server):
     assert 'test.foo' == data[0][0]
     assert {'bar': 'baz'} == data[0][2]
     assert data[0][1]
-    assert isinstance(data[0][1], int)
+    assert isinstance(data[0][1].seconds, int)
+    assert isinstance(data[0][1].nanoseconds, int)
+    assert data[0][1].seconds == int(test_start_time)
 
 
 @pytest.mark.asyncio

@@ -2,16 +2,22 @@ import aiofluent.handler
 import asyncio
 import logging
 import pytest
+import sys
+import time
+from mock import MagicMock
 
-async def wait_for_queue(handler, loop):
+
+async def wait_for_queue(handler):
     while handler._queue is None or handler._queue._queue is None:
-        await asyncio.sleep(0.01, loop=loop)
+        await asyncio.sleep(0.01)
     while handler._queue.qsize() > 0:
-        await asyncio.sleep(0.01, loop=loop)
+        await asyncio.sleep(0.01)
 
 
 @pytest.mark.asyncio
 async def test_simple(mock_server, event_loop):
+    test_start_time = time.time()
+    time.time = MagicMock(return_value=test_start_time)
     handler = aiofluent.handler.FluentHandler(
         'app.follow', connection_factory=mock_server.factory)
     logging.basicConfig(level=logging.INFO)
@@ -23,7 +29,7 @@ async def test_simple(mock_server, event_loop):
         'from': 'userA',
         'to': 'userB'
     })
-    await wait_for_queue(handler, event_loop)
+    await wait_for_queue(handler)
     handler.close()
     data = mock_server.get_recieved()
     assert 1 == len(data)
@@ -31,8 +37,10 @@ async def test_simple(mock_server, event_loop):
     assert 'app.follow' == data[0][0]
     assert 'userA' == data[0][2]['from']
     assert 'userB' == data[0][2]['to']
-    assert data[0][1]
-    assert isinstance(data[0][1], int)
+
+    assert isinstance(data[0][1].seconds, int)
+    assert isinstance(data[0][1].nanoseconds, int)
+    assert data[0][1].seconds == int(test_start_time)
 
 
 @pytest.mark.asyncio
@@ -52,7 +60,7 @@ async def test_custom_fmt(mock_server, event_loop):
     log.handlers = []
     log.addHandler(handler)
     log.info({'sample': 'value'})
-    await wait_for_queue(handler, event_loop)
+    await wait_for_queue(handler)
     handler.close()
 
     data = mock_server.get_recieved()
@@ -73,7 +81,7 @@ async def test_json_encoded_message(mock_server, event_loop):
     log.handlers = []
     log.addHandler(handler)
     log.info('{"key": "hello world!", "param": "value"}')
-    await wait_for_queue(handler, event_loop)
+    await wait_for_queue(handler)
     handler.close()
 
     data = mock_server.get_recieved()
@@ -92,7 +100,7 @@ async def test_unstructured_message(mock_server, event_loop):
     log.handlers = []
     log.addHandler(handler)
     log.info('hello %s', 'world')
-    await wait_for_queue(handler, event_loop)
+    await wait_for_queue(handler)
     handler.close()
 
     data = mock_server.get_recieved()
@@ -111,7 +119,7 @@ async def test_unstructured_formatted_message(mock_server, event_loop):
     log.handlers = []
     log.addHandler(handler)
     log.info('hello world, %s', 'you!')
-    await wait_for_queue(handler, event_loop)
+    await wait_for_queue(handler)
     handler.close()
 
     data = mock_server.get_recieved()
@@ -130,7 +138,7 @@ async def test_non_string_simple_message(mock_server, event_loop):
     log.handlers = []
     log.addHandler(handler)
     log.info(42)
-    await wait_for_queue(handler, event_loop)
+    await wait_for_queue(handler)
     handler.close()
 
     data = mock_server.get_recieved()
@@ -148,7 +156,7 @@ async def test_non_string_dict_message(mock_server, event_loop):
     log.handlers = []
     log.addHandler(handler)
     log.info({42: 'root'})
-    await wait_for_queue(handler, event_loop)
+    await wait_for_queue(handler)
     handler.close()
 
     data = mock_server.get_recieved()
