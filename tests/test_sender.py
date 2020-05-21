@@ -1,7 +1,10 @@
 # -*- coding: utf-8 -*-
 import aiofluent.sender
+from aiofluent.sender import EventTime
 import pytest
 import socket
+import time
+from mock import MagicMock
 
 
 def test_no_kwargs():
@@ -42,14 +45,18 @@ def test_tolerant():
 
 @pytest.mark.asyncio
 async def test_simple(mock_sender, mock_server):
+    test_start_time = time.time()
+    time.time = MagicMock(return_value=test_start_time)
     await mock_sender.async_emit('foo', {'bar': 'baz'})
     data = mock_server.get_recieved()
     assert 1 == len(data)
     assert 3 == len(data[0])
     assert 'test.foo' == data[0][0]
     assert {'bar': 'baz'} == data[0][2]
-    assert data[0][1]
-    assert isinstance(data[0][1], int)
+
+    et = EventTime.from_bytes(data[0][1].data)
+    assert isinstance(et, float)
+    assert et == test_start_time
 
 
 @pytest.mark.asyncio

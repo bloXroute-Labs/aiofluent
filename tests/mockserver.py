@@ -29,4 +29,4 @@ class MockRecvServer:
 
     def get_recieved(self):
         self._buf.seek(0)
-        return list(Unpacker(self._buf, encoding='utf-8'))
+        return list(Unpacker(self._buf, raw=False))

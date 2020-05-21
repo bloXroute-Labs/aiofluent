@@ -18,7 +18,7 @@ setup(
     long_description=open(README).read() + '\n\n' + open(CHANGELOG).read(),
     package_dir={'aiofluent': 'aiofluent'},
     packages=['aiofluent'],
-    install_requires=['msgpack-python'],
+    install_requires=['msgpack'],
     author='Nathan Van Gheem',
     author_email='vangheem@gmail.com',
     url='https://github.com/onna/aiofluent',
@@ -35,7 +35,8 @@ setup(
             'pytest-asyncio>=0.8.0',
             'pytest-aiohttp',
             'pytest-cov',
-            'coverage'
+            'coverage',
+            'mock'
         ]
     },
     test_suite='tests'
