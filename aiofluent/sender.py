@@ -76,8 +76,6 @@ class FluentSender(object):
                  packer_kwargs=None,
                  **kwargs):
 
-        if packer_kwargs is None:
-            packer_kwargs = dict()
         self._tag = tag
         self._host = host
         self._port = port
