@@ -73,8 +73,11 @@ class FluentSender(object):
                  connection_factory=connection_factory,
                  log_unhandled_exceptions=False,
                  error_count_limit=10,
+                 packer_kwargs=None,
                  **kwargs):
 
+        if packer_kwargs is None:
+            packer_kwargs = dict()
         self._tag = tag
         self._host = host
         self._port = port
@@ -94,6 +97,10 @@ class FluentSender(object):
         self._error_count = 0
         self._error_count_limit = error_count_limit
         self._lock = None
+
+        if packer_kwargs is None:
+            packer_kwargs = {}
+        self._packer_kwargs = packer_kwargs
 
         self._connection_factory = connection_factory
 
@@ -142,7 +149,7 @@ class FluentSender(object):
         packet = (tag, timestamp, data)
         if self._verbose:
             print(packet)
-        return msgpack.packb(packet)
+        return msgpack.packb(packet, **self._packer_kwargs)
 
     async def _async_send(self, bytes_):
         try:
